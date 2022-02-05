@@ -1,18 +1,20 @@
 using CodecZlib
-using BioSequences
+using FASTX
 using TranscodingStreams
 using FuzzySearch
+using DelimitedFiles
+#using TickTock
 
 
-function write_record(stream::IO,record::BioSequences.FASTQ.Record,rng::UnitRange{Int64},rc::Bool)
+function write_record(stream::IO,record::FASTX.FASTQ.Record,rng::UnitRange{Int64},rc::Bool)
     # pline=[0x0a,0x2b,0x0a]
     if rc
         revcomplement_record!(record,rng)
     end
-    if length(rng)>0 && length(rng)<length(record.sequence)
-        seq_range=rng+first(record.sequence)-1
-        qual_range=rng+first(record.quality)-1
-        id_range=1:(first(record.sequence)-1)
+    if length(rng)>0
+        seq_range=rng.+first(record.sequence).-1
+        qual_range=rng.+first(record.quality).-1
+        id_range=1:(first(record.sequence).-1)
         unsafe_write(stream,pointer(record.data,first(id_range)),length(id_range))
         unsafe_write(stream,pointer(record.data,first(seq_range)),length(seq_range))
         # the code below is slower
@@ -32,16 +34,16 @@ function write_record(stream::IO,record::BioSequences.FASTQ.Record,rng::UnitRang
         write(stream,record.data)
         write(stream,0x0a)
     else
-        id_range=1:(first(record.sequence)-1)
+        id_range=1:(first(record.sequence).-1)
         unsafe_write(stream,pointer(record.data,first(id_range)),length(id_range))
         write(stream,0x4e,0x0a,0x2b,0x0a,0x21)
         write(stream,0x0a);
     end
 end
 
-function revcomplement_record!(record::BioSequences.FASTQ.Record,rng::UnitRange{Int64})
-    seq_range=rng+first(record.sequence)-1
-    qual_range=rng+first(record.quality)-1
+function revcomplement_record!(record::FASTX.FASTQ.Record,rng::UnitRange{Int64})
+    seq_range=rng.+first(record.sequence).-1
+    qual_range=rng.+first(record.quality).-1
     for i=seq_range
         if !(record.data[i]==0x4e)
             (record.data[i] & 0x02)>0 ? (record.data[i] ⊻= 0x04) : (record.data[i] ⊻= 0x15)
@@ -59,9 +61,9 @@ function suffix_mismatch_(data_short::Vector{UInt8},data_long::Vector{UInt8},rng
     nmatch=0
     lu=0
     i=rng_short.start
-    imax=rng_short.stop+1
+    imax=rng_short.stop.+1
     j=rng_long.stop
-    jmin=rng_short.start-1
+    jmin=rng_short.start.-1
     while i<imax && j>jmin && (maxerr<0 || nerr<=maxerr) && (maxlu<0 || lu<maxlu)
         lu+=1
         x=data_short[i] | 0x20 #lower case it
@@ -82,7 +84,7 @@ function suffix_mismatch_(data_short::Vector{UInt8},data_long::Vector{UInt8},rng
     return nerr, nmatch
 end
 
-function is_suffix_(read1::BioSequences.FASTQ.Record,read2::BioSequences.FASTQ.Record,maxerr::Int64,minmatch::Int64,maxlu::Int64)
+function is_suffix_(read1::FASTX.FASTQ.Record,read2::FASTX.FASTQ.Record,maxerr::Int64,minmatch::Int64,maxlu::Int64)
     #RNA1 is long, DNA1 is short
     #RNA2 is short, DNA2 is long
     (nerr,nmatch)=suffix_mismatch_(read1.data,read2.data,read1.sequence,read2.sequence,maxerr,maxlu)
@@ -96,28 +98,28 @@ function revcomp_stream(streamIN::IO,streamOUT::IO, verbose::Bool )
     nread=0::Int64
     verbose_period=100000
 
-    cumtime=0.0
-    tic()
+    cumtime=1.0
+    #tick()
     while !eof(reader)
         nread+=1
         if verbose && mod(nread,verbose_period)==0
-            cumtime+=toq()
-            print(STDERR,"Reverse complemented ", nread/(1000000.0), " million reads [", nread/cumtime/1000000*60, " million reads/min]\n")
-            tic()
+            #cumtime+=tock()
+            print(stderr,"Reverse complemented ", nread/(1000000.0), " million reads [", nread/cumtime/1000000*60, " million reads/min]\n")
+            #tick()
         end
         read!(reader, record)
         revcomplement_record!(record,1:length(record.sequence))
         write(streamOUT,record.data)
         write(streamOUT,0x0a)
     end
-    cumtime+=toq()
-    print(STDERR,"DONE. Reverse complemented ", nread/(1000000.0), " million reads [", nread/cumtime/1000000*60, " million reads/min]\n")
+    #cumtime+=tock()
+    print(stderr,"DONE. Reverse complemented ", nread/(1000000.0), " million reads [", nread/cumtime/1000000*60, " million reads/min]\n")
     return nread
 end
 
 function revcompFQ(fqIN::String,fqOUT::String, verbose::Bool=true )
     if length(fqOUT)==0
-        streamOUT=STDOUT
+        streamOUT=stdout
     else
         if endswith(fqOUT, ".gz")
             codec = GzipCompressor()
@@ -129,7 +131,7 @@ function revcompFQ(fqIN::String,fqOUT::String, verbose::Bool=true )
     end
     streamIN=makestream_in(fqIN)
     revcomp_stream(streamIN,streamOUT,verbose)
-    !(streamOUT==STDOUT) ? close(streamOUT) : true
+    !(streamOUT==stdout) ? close(streamOUT) : true
     close(streamIN)
 end
 
@@ -146,15 +148,15 @@ function readlength_summary_stream_(stream::IO,blen::Int64,maxreadl::Int64, verb
     nread=0::Int64
     verbose_period=100000
 
-    cumtime=0.0
-    tic()
+    cumtime=1.0
+    #tick()
     while !eof(stream)
         nread+=1
         # print(nread,"\n")
         if verbose && mod(nread,verbose_period)==0
-            cumtime+=toq()
-            print(STDERR,"Processed ", nread/(1000000.0), " million reads [", nread/cumtime/1000000*60, " million reads/min]\n")
-            tic()
+            #cumtime+=tock()
+            print(stderr,"Processed ", nread/(1000000.0), " million reads [", nread/cumtime/1000000*60, " million reads/min]\n")
+            #tick()
         end
 
         s=readline(stream)
@@ -199,15 +201,15 @@ function readlength_SE_summary_stream_(stream::IO,maxreadl::Int64, verbose::Bool
     nread=0::Int64
     verbose_period=100000
 
-    cumtime=0.0
-    tic()
+    cumtime=1.0
+    #tick()
     while !eof(stream)
         nread+=1
         # print(nread,"\n")
         if verbose && mod(nread,verbose_period)==0
-            cumtime+=toq()
-            print(STDERR,"Processed ", nread/(1000000.0), " million reads [", nread/cumtime/1000000*60, " million reads/min]\n")
-            tic()
+            #cumtime+=tock()
+            print(stderr,"Processed ", nread/(1000000.0), " million reads [", nread/cumtime/1000000*60, " million reads/min]\n")
+            #tick()
         end
 
         s=readline(stream)
@@ -233,14 +235,14 @@ end
 #     verbose_period=100000
 #
 #     cumtime=0.0
-#     tic()
+#     tick()
 #     while !eof(stream)
 #         nread+=1
 #         # print(nread,"\n")
 #         if verbose && mod(nread,verbose_period)==0
-#             cumtime+=toq()
-#             print(STDERR,"Processed ", nread/(1000000.0), " million reads [", nread/cumtime/1000000*60, " million reads/min]\n")
-#             tic()
+#             #cumtime+=tock()
+#             print(stderr,"Processed ", nread/(1000000.0), " million reads [", nread/cumtime/1000000*60, " million reads/min]\n")
+#             tick()
 #         end
 #
 #         x=read(stream,UInt8)
@@ -286,16 +288,16 @@ function readlength_summary(fname::String,fout::String,blen::Int64,maxreadl::Int
     M_F02, M_0R2, M_F0, M_0R = readlength_summary_stream_(in,blen,maxreadl,verbose)
     println(stream, "\n>>RNA/DNA length distribution")
     print(stream,"MF02"*"\t")
-    Base.showarray(stream,M_F02,true)
+    Base.print(stream,M_F02,true)
     println(stream,"")
     print(stream,"M0R2"*"\t")
-    Base.showarray(stream,M_0R2,true)
+    Base.print(stream,M_0R2,true)
     println(stream,"")
     print(stream,"MF0"*"\t")
-    Base.showarray(stream,M_F0,true)
+    Base.print(stream,M_F0,true)
     println(stream,"")
     print(stream,"M0R"*"\t")
-    Base.showarray(stream,M_0R,true)
+    Base.print(stream,M_0R,true)
     println(stream,"")
     close(stream)
     close(in)
@@ -308,7 +310,7 @@ function readlength_SE_summary(fname::String,fout::String,maxreadl::Int64,verbos
     M = readlength_SE_summary_stream_(in,maxreadl,verbose)
     println(stream, "\n>>RNA/DNA length distribution")
     print(stream,"M"*"\t")
-    Base.showarray(stream,M,true)
+    Base.print(stream,M,true)
     println(stream,"")
     close(stream)
     close(in)
@@ -334,15 +336,15 @@ function splice_mates_stream_(streamR1::IO,streamR2::IO,streamD1::IO,streamD2::I
     nspliced=0::Int64
     verbose_period=100000
 
-    cumtime=0.0
-    tic()
+    cumtime=1.0
+    #tick()
     while !eof(readerR1)
         nread+=1
         # print(nread,"\n")
         if verbose && mod(nread,verbose_period)==0
-            cumtime+=toq()
-            print(STDERR,"Spliced ", nread/(1000000.0), " million reads [", nread/cumtime/1000000*60, " million reads/min]\n")
-            tic()
+            #cumtime+=tock()
+            print(stderr,"Spliced ", nread/(1000000.0), " million reads [", nread/cumtime/1000000*60, " million reads/min]\n")
+            #tick()
         end
         read!(readerR1, recordR1)
         read!(readerR2, recordR2)
@@ -386,13 +388,13 @@ function summarize_splicing_(read_counts, parsable::Bool, stream::IO)
     println(stream,read_counts[1])
     println(stream, "\n>>RNA/DNA length distribution")
     print(stream,"spliced"*"\t")
-    Base.showarray(stream,read_counts[3],parsable)
+    Base.print(stream,read_counts[3],parsable)
     println(stream,"")
     print(stream,"unspliced_1"*"\t")
-    Base.showarray(stream,read_counts[4],parsable)
+    Base.print(stream,read_counts[4],parsable)
     println(stream,"")
     print(stream,"unspliced_2"*"\t")
-    Base.showarray(stream,read_counts[5],parsable)
+    Base.print(stream,read_counts[5],parsable)
     println(stream,"")
 
     # println("")
@@ -443,11 +445,11 @@ end
 
 
 
-function write_record_skipempty(stream::IO,record::BioSequences.FASTQ.Record,rng::UnitRange{Int64},rc::Bool)
+function write_record_skipempty(stream::IO,record::FASTX.FASTQ.Record,rng::UnitRange{Int64},rc::Bool)
     # pline=[0x0a,0x2b,0x0a]
-    if length(rng)>0 && length(rng)<length(record.sequence)
-        seq_range=rng+first(record.sequence)-1
-        qual_range=rng+first(record.quality)-1
+    if length(rng)>0
+        seq_range=rng.+first(record.sequence).-1
+        qual_range=rng.+first(record.quality).-1
         id_range=1:(first(record.sequence)-1)
         if rc
             revcomplement_record!(record,rng)
@@ -484,7 +486,7 @@ function debridgeSE_stream_(bridgeF::String, bridgeR::String, streamX::IO, strea
 
     read_counts=zeros(Int64,4,1)
     bridge_pos_mean_X=zeros(Int64,4,1)
-    maxl=maxreadlen-min(wF_length,wR_length)+1 #+1 because 1st element is length 0
+    maxl=maxreadlen-min(wF_length,wR_length).+1 #+1 because 1st element is length 0
     rd_len=vcat([zeros(Int64,maxreadlen+1,1)],[zeros(Int64,maxl,maxl) for i in range(1,2)],[zeros(Int64,maxreadlen+1,1)]) #rna length / dna length when both, otherwise just read length
 
     readerX = FASTQ.Reader(streamX)
@@ -501,15 +503,15 @@ function debridgeSE_stream_(bridgeF::String, bridgeR::String, streamX::IO, strea
     end
 
     nread=0::Int64
-    cumtime=0.0
-    tic()
+    cumtime=1.0
+    #tick()
     while !eof(readerX)
         nread+=1
         # print(nread,"\n")
         if verbose && mod(nread,100000)==0
-            cumtime+=toq()
-            print(STDERR,"Processed ", nread/1000000.0, " million reads [", round(nread/cumtime), " reads/s]\n")
-            tic()
+            #cumtime+=tock()
+            print(stderr,"Processed ", nread/1000000.0, " million reads [", round(nread/cumtime), " reads/s]\n")
+            #tick()
         end
         read!(readerX, recordX)
         n1X=first(recordX.sequence)
@@ -580,18 +582,18 @@ function debridgeSE_stream_fuzzy_(bridgeF::String, bridgeR::String, streamX::IO,
     if writeDebridged
         stream_array_DNA=streamsOUT[1]
         stream_array_RNA=streamsOUT[2]
-        flip_read=convert(Array{Bool,1},[0 0 1 0]) .& revcomp_bRreads
+        flip_read=convert(Vector{Bool},[0;0;1;0]) .& revcomp_bRreads
     end
     nread=0
-    cumtime=0.0
-    tic()
+    cumtime=1.0
+    #tick()
     while !eof(readerX)
         nread+=1
         # print(nread,"\n")
         if verbose && mod(nread,100000)==0
-            cumtime+=toq()
-            print(STDERR,"Processed ", nread/1000000.0, " million reads [", round(nread/cumtime), " reads/s]\n")
-            tic()
+           #cumtime+=tock()
+            print(stderr,"Processed ", nread/1000000.0, " million reads [", round(nread/cumtime), " reads/s]\n")
+            #tick()
         end
         read!(readerX, recordX)
         n1X=first(recordX.sequence)
@@ -683,15 +685,15 @@ function debridgePE_stream_(bridgeF::String, bridgeR::String, streamX::IO, strea
     end
 
     nread=0::Int64
-    cumtime=0.0
-    tic()
+    cumtime=1.0
+    #tick()
     while !eof(readerX)
         nread+=1
         # print(nread,"\n")
         if verbose && mod(nread,100000)==0
-            cumtime+=toq()
-            print(STDERR,"Processed ", nread/1000000.0, " million reads [", round(nread/cumtime), " reads/s]\n")
-            tic()
+            #cumtime+=tock()
+            print(stderr,"Processed ", nread/1000000.0, " million reads [", round(nread/cumtime), " reads/s]\n")
+            #tick()
         end
         read!(readerX, recordX)
         read!(readerY, recordY)
@@ -809,15 +811,15 @@ function debridgePE_stream_fuzzy_(bridgeF::String, bridgeR::String, streamX::IO,
         flip_RNA_PE2=convert(Array{Bool,2},[0 0 0 0 ; 0 0 0 0 ; 0 0 1 1 ; 0 0 1 0]) .& revcomp_bRreads
     end
     nread=0
-    cumtime=0.0
-    tic()
+    cumtime=1.0
+    #tick()
     while !eof(readerX)
         nread+=1
         # print(nread,"\n")
         if verbose && mod(nread,100000)==0
-            cumtime+=toq()
-            print(STDERR,"Processed ", nread/1000000.0, " million reads [", round(nread/cumtime), " reads/s]\n")
-            tic()
+            #cumtime+=tock()
+            print(stderr,"Processed ", nread/1000000.0, " million reads [", round(nread/cumtime), " reads/s]\n")
+            #tick()
         end
         read!(readerX, recordX)
         read!(readerY, recordY)
@@ -908,7 +910,7 @@ end
 
 function makestream_out(fileprefix::String,filename::String, compress::Bool=true, ext::String=".fastq")
     if isempty(fileprefix)
-        return STDOUT
+        return stdout
     else
         if compress
             codec=GzipCompressor()
@@ -934,20 +936,20 @@ function summarize_debridgingPE_(read_counts, parsable::Bool, stream::IO)
     println(stream, ">>Total counts")
     println(stream, sum(read_counts[1]))
     println(stream,">>Count matrix")
-    Base.showarray(stream,read_counts[1],parsable)
+    Base.print(stream,read_counts[1],parsable)
     println(stream, "\n>>Count %")
-    Base.showarray(stream,read_counts[1]*100.0/sum(read_counts[1]),parsable)
+    Base.print(stream,read_counts[1]*100.0/sum(read_counts[1]),parsable)
     println(stream, "\n>>Bridge mean position read 1")
-    Base.showarray(stream,read_counts[2],parsable)
+    Base.print(stream,read_counts[2],parsable)
     println(stream, "\n>>Bridge mean position read 2")
-    Base.showarray(stream,read_counts[3],parsable)
+    Base.print(stream,read_counts[3],parsable)
     println(stream, "\n>>RNA/DNA length distribution read 1/2")
     bridgecodes=["0","F","R","M"]
     for i=1:4
         print(stream,"bridge_" * bridgecodes[i] * "_1\t")
-        Base.showarray(stream,read_counts[4][i],parsable)
+        Base.print(stream,read_counts[4][i],parsable)
         print(stream,"\nbridge_" * bridgecodes[i] * "_2\t")
-        Base.showarray(stream,read_counts[5][i],parsable)
+        Base.print(stream,read_counts[5][i],parsable)
         println(stream,"")
     end
     # println("")
@@ -957,16 +959,16 @@ function summarize_debridgingSE_(read_counts, parsable::Bool, stream::IO)
     println(stream, ">>Total counts")
     println(stream,sum(read_counts[1]))
     println(stream,">>Count matrix")
-    Base.showarray(stream,read_counts[1],parsable)
+    Base.print(stream,read_counts[1],parsable)
     println(stream, "\n>>Count %")
-    Base.showarray(stream,read_counts[1]*100.0/sum(read_counts[1]),parsable)
+    Base.print(stream,read_counts[1]*100.0/sum(read_counts[1]),parsable)
     println(stream, "\n>>Bridge mean position")
-    Base.showarray(stream,read_counts[2],parsable)
+    Base.print(stream,read_counts[2],parsable)
     println(stream, "\n>>RNA/DNA length distribution")
     bridgecodes=["0","F","R","M"]
     for i=1:4
         print(stream,"bridge_" * bridgecodes[i] * "\t")
-        Base.showarray(stream,read_counts[3][i],parsable)
+        Base.print(stream,read_counts[3][i],parsable)
         println(stream,"")
     end
     # println("")
@@ -1042,7 +1044,7 @@ function debridgePE(bridgeF::String, bridgeR::String, fqX::String, fqY::String, 
         FRrna2=makestream_out(fqout_prefix, "FR.rna.2",compressOut) #antisense
         FRdna2=makestream_out(fqout_prefix, "FR.dna.2",compressOut)
 
-        NULLstream=STDOUT #
+        NULLstream=stdout #
 
         # pritories for reversing reads: F, R, M, 0
         #[00, 0F*, 0R*&, 0M*; F0, FF, FR, FM; R0&, RF*, RR, RM; M0, MF*, MR*, MM] * we reverse the reads, & 2nd read (after reverse) contains no DNA
@@ -1070,22 +1072,22 @@ function debridgePE(bridgeF::String, bridgeR::String, fqX::String, fqY::String, 
     if writeDebridged>0
         for i=1:4
             for j=1:4
-                !(stream_array_DNA_PE1[i,j]==STDOUT) ? close(stream_array_DNA_PE1[i,j]) : true
-                !(stream_array_DNA_PE2[i,j]==STDOUT) ? close(stream_array_DNA_PE2[i,j]) : true
-                !(stream_array_RNA_PE1[i,j]==STDOUT) ? close(stream_array_RNA_PE1[i,j]) : true
-                !(stream_array_RNA_PE1[i,j]==STDOUT) ? close(stream_array_RNA_PE1[i,j]) : true
+                !(stream_array_DNA_PE1[i,j]==stdout) ? close(stream_array_DNA_PE1[i,j]) : true
+                !(stream_array_DNA_PE2[i,j]==stdout) ? close(stream_array_DNA_PE2[i,j]) : true
+                !(stream_array_RNA_PE1[i,j]==stdout) ? close(stream_array_RNA_PE1[i,j]) : true
+                !(stream_array_RNA_PE1[i,j]==stdout) ? close(stream_array_RNA_PE1[i,j]) : true
             end
         end
     end
     if writePositions>0
-        !(streamSTATS==STDOUT) ? close(streamSTATS) : true
+        !(streamSTATS==stdout) ? close(streamSTATS) : true
     end
 
     close(streamX)
     close(streamY)
 
     summarize_debridgingPE_(read_counts,true,streamSUMMARY)
-    !(streamSUMMARY==STDOUT) ? close(streamSUMMARY) : true
+    !(streamSUMMARY==stdout) ? close(streamSUMMARY) : true
     return read_counts
 
 end
@@ -1120,7 +1122,7 @@ function debridgeSE(bridgeF::String, bridgeR::String, fqX::String, fqout_prefix:
         #M reads
         M=makestream_out(fqout_prefix, "M.xxx",compressOut)
 
-        NULLstream=STDOUT #
+        NULLstream=stdout #
 
         # pritories for reversing reads: F, R, M, 0
         #[00, 0F*, 0R*&, 0M*; F0, FF, FR, FM; R0&, RF*, RR, RM; M0, MF*, MR*, MM] * we reverse the reads, & 2nd read (after reverse) contains no DNA
@@ -1138,17 +1140,17 @@ function debridgeSE(bridgeF::String, bridgeR::String, fqX::String, fqout_prefix:
     end
     if writeDebridged>0
         for i=1:4
-            !(stream_array_DNA[i]==STDOUT) ? close(stream_array_DNA[i]) : true
-            !(stream_array_RNA[i]==STDOUT) ? close(stream_array_RNA[i]) : true
+            !(stream_array_DNA[i]==stdout) ? close(stream_array_DNA[i]) : true
+            !(stream_array_RNA[i]==stdout) ? close(stream_array_RNA[i]) : true
         end
     end
     if writePositions>0
-        !(streamSTATS==STDOUT) ? close(streamSTATS) : true
+        !(streamSTATS==stdout) ? close(streamSTATS) : true
     end
 
     close(streamX)
     summarize_debridgingSE_(read_counts,true,streamSUMMARY)
-    !(streamSUMMARY==STDOUT) ? close(streamSUMMARY) : true
+    !(streamSUMMARY==stdout) ? close(streamSUMMARY) : true
     return read_counts
 
 end
