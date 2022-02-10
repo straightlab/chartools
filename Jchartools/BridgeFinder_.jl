@@ -487,7 +487,7 @@ function debridgeSE_stream_(bridgeF::String, bridgeR::String, streamX::IO, strea
     read_counts=zeros(Int64,4,1)
     bridge_pos_mean_X=zeros(Int64,4,1)
     maxl=maxreadlen-min(wF_length,wR_length).+1 #+1 because 1st element is length 0
-    rd_len=vcat([zeros(Int64,maxreadlen+1,1)],[zeros(Int64,maxl,maxl) for i in range(1,2)],[zeros(Int64,maxreadlen+1,1)]) #rna length / dna length when both, otherwise just read length
+    rd_len=vcat([zeros(Int64,maxreadlen+1,1)],[zeros(Int64,maxl,maxl) for i in range(1,2, step=1)],[zeros(Int64,maxreadlen+1,1)]) #rna length / dna length when both, otherwise just read length
 
     readerX = FASTQ.Reader(streamX)
     recordX = FASTQ.Record()
@@ -570,7 +570,7 @@ function debridgeSE_stream_fuzzy_(bridgeF::String, bridgeR::String, streamX::IO,
     read_counts=zeros(Int64,4,1)
     bridge_pos_mean_X=zeros(Int64,4,1)
     maxl=maxreadlen-min(wF_length,wR_length)+1 #+1 because 1st element is length 0
-    rd_len=vcat([zeros(Int64,maxreadlen+1,1)],[zeros(Int64,maxl,maxl) for i in range(1,2)],[zeros(Int64,maxreadlen+1,1)]) #rna length / dna length when both, otherwise just read length
+    rd_len=vcat([zeros(Int64,maxreadlen+1,1)],[zeros(Int64,maxl,maxl) for i in range(1,2, step=1)],[zeros(Int64,maxreadlen+1,1)]) #rna length / dna length when both, otherwise just read length
 
     readerX = FASTQ.Reader(streamX)
     recordX = FASTQ.Record()
@@ -654,8 +654,8 @@ function debridgePE_stream_(bridgeF::String, bridgeR::String, streamX::IO, strea
     bridge_pos_mean_X=zeros(Int64,4,4)
     bridge_pos_mean_Y=zeros(Int64,4,4)
     maxl=maxreadlen-min(wF_length,wR_length)+1 #+1 because 1st element is length 0
-    rd_lenX=vcat([zeros(Int64,maxreadlen+1,1)],[zeros(Int64,maxl,maxl) for i in range(1,2)],[zeros(Int64,maxreadlen+1,1)])
-    rd_lenY=vcat([zeros(Int64,maxreadlen+1,1)],[zeros(Int64,maxl,maxl) for i in range(1,2)],[zeros(Int64,maxreadlen+1,1)])
+    rd_lenX=vcat([zeros(Int64,maxreadlen+1,1)],[zeros(Int64,maxl,maxl) for i in range(1,2, step=1)],[zeros(Int64,maxreadlen+1,1)])
+    rd_lenY=vcat([zeros(Int64,maxreadlen+1,1)],[zeros(Int64,maxl,maxl) for i in range(1,2, step=1)],[zeros(Int64,maxreadlen+1,1)])
 
     readerX = FASTQ.Reader(streamX)
     readerY = FASTQ.Reader(streamY)
@@ -781,8 +781,8 @@ function debridgePE_stream_fuzzy_(bridgeF::String, bridgeR::String, streamX::IO,
     bridge_pos_mean_X=zeros(Int64,4,4)
     bridge_pos_mean_Y=zeros(Int64,4,4)
     maxl=maxreadlen-min(wF_length,wR_length)+1 #+1 because 1st element is length 0
-    rd_lenX=vcat([zeros(Int64,maxreadlen+1,1)],[zeros(Int64,maxl,maxl) for i in range(1,2)],[zeros(Int64,maxreadlen+1,1)])
-    rd_lenY=vcat([zeros(Int64,maxreadlen+1,1)],[zeros(Int64,maxl,maxl) for i in range(1,2)],[zeros(Int64,maxreadlen+1,1)])
+    rd_lenX=vcat([zeros(Int64,maxreadlen+1,1)],[zeros(Int64,maxl,maxl) for i in range(1,2, step=1)],[zeros(Int64,maxreadlen+1,1)])
+    rd_lenY=vcat([zeros(Int64,maxreadlen+1,1)],[zeros(Int64,maxl,maxl) for i in range(1,2, step=1)],[zeros(Int64,maxreadlen+1,1)])
 
 
     readerX = FASTQ.Reader(streamX)
