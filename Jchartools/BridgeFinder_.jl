@@ -425,7 +425,7 @@ function splice_mates(fq_prefix::String,fq_spliced_prefix::String,fq_unspliced_p
     # print(streamSUMMARY,",")
     # println(streamSUMMARY, nspliced)
 
-    summarize_splicing_(read_counts,true,streamSUMMARY)
+    summarize_splicing_(read_counts,streamSUMMARY)
 
     close(streamSUMMARY)
     close(stream_splicedR)
@@ -1086,7 +1086,7 @@ function debridgePE(bridgeF::String, bridgeR::String, fqX::String, fqY::String, 
     close(streamX)
     close(streamY)
 
-    summarize_debridgingPE_(read_counts,true,streamSUMMARY)
+    summarize_debridgingPE_(read_counts,streamSUMMARY)
     !(streamSUMMARY==stdout) ? close(streamSUMMARY) : true
     return read_counts
 
@@ -1149,7 +1149,7 @@ function debridgeSE(bridgeF::String, bridgeR::String, fqX::String, fqout_prefix:
     end
 
     close(streamX)
-    summarize_debridgingSE_(read_counts,true,streamSUMMARY)
+    summarize_debridgingSE_(read_counts,streamSUMMARY)
     !(streamSUMMARY==stdout) ? close(streamSUMMARY) : true
     return read_counts
 
