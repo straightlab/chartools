@@ -30,7 +30,8 @@ function write_record(stream::IO,record::FASTX.FASTQ.Record,rng::UnitRange{Int64
         #     write(stream,record.data[i])
         # end
         write(stream,0x0a)
-    elseif length(rng)>0
+    elseif length(rng)<0
+        print("length(rng)<0")
         write(stream,record.data)
         write(stream,0x0a)
     else
@@ -105,12 +106,12 @@ function revcomp_stream(streamIN::IO,streamOUT::IO, verbose::Bool )
         if verbose && mod(nread,verbose_period)==0
             #cumtime+=tock()
             print(stderr,"Reverse complemented ", nread/(1000000.0), " million reads [", nread/cumtime/1000000*60, " million reads/min]\n")
-            #tick()
         end
         read!(reader, record)
         revcomplement_record!(record,1:length(record.sequence))
-        write(streamOUT,record.data)
+        write(streamOUT,String(record.data))
         write(streamOUT,0x0a)
+        flush(streamOUT)
     end
     #cumtime+=tock()
     print(stderr,"DONE. Reverse complemented ", nread/(1000000.0), " million reads [", nread/cumtime/1000000*60, " million reads/min]\n")
@@ -118,6 +119,7 @@ function revcomp_stream(streamIN::IO,streamOUT::IO, verbose::Bool )
 end
 
 function revcompFQ(fqIN::String,fqOUT::String, verbose::Bool=true )
+    print(stderr,"Reverse complementing ", fqIN, " to ", fqOUT, "\n")
     if length(fqOUT)==0
         streamOUT=stdout
     else
@@ -131,6 +133,7 @@ function revcompFQ(fqIN::String,fqOUT::String, verbose::Bool=true )
     end
     streamIN=makestream_in(fqIN)
     revcomp_stream(streamIN,streamOUT,verbose)
+    flush(streamOUT)
     !(streamOUT==stdout) ? close(streamOUT) : true
     close(streamIN)
 end

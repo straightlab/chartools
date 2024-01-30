@@ -4,7 +4,7 @@ Suite of tools to work with ChAR-seq data.
 ## Installation
 
 ### Install the python chartools package
-Clone this repository then `pip install <PATH_TO_REPOSITORY_CLONE>`
+Clone this repository then `pip install -e <PATH_TO_REPOSITORY_CLONE>`
 
 
 ### Install the Julia package
